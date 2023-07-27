@@ -1,0 +1,51 @@
+1) Для отливаемых деталей посчитать сумму остатка на складах по всем этапам
+SELECT
+	parts.id, 
+	parts.name,
+	stages.name,
+	(SELECT 
+	 	sum(count) 
+	FROM stages 
+	WHERE parts.id = stages.part_id) 
+	as s 
+FROM parts
+JOIN stages
+	ON parts.id = stages.part_id
+WHERE stages.name = 'восковые'
+ORDER BY s
+
+2) Вывести лог операций с фамилиями
+SELECT
+	log.username, 
+	users.name, 
+	users.surname, 
+	log.action, 
+	log.part_id, 
+	log.stage_name, 
+	log.count, 
+	log.time 
+FROM log 
+JOIN users 
+	ON log.username = users.username 
+ORDER BY log.time
+
+3) Вывод ведомости
+SELECT
+	parts.id,
+	parts.name,
+	stages.name,
+	stages.count
+FROM parts 
+JOIN stages 
+	ON parts.id = stages.part_id
+WHERE parts.id 
+	LIKE 'BS\_0%'
+ORDER BY parts.id
+
+4) Вывести лог за конкретную дату
+SELECT * 
+FROM log 
+WHERE 
+	date_part('year', time)=2023 and 
+	date_part('month', time)=07 and 
+	date_part('day', time)=13;

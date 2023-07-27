@@ -1,0 +1,1 @@
+pg_dump -p 5432 -U postgres -w --format=plain --column-inserts --inserts bassoon > C:\Users\Admin\Desktop\BassoonSklad_bot\BassoonSklad_bot\Backups\bassoon_%DATE%_%TIME:~0,2%-%TIME:~3,2%-%TIME:~6,2%.sql
