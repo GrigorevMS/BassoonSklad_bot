@@ -48,8 +48,8 @@ def get_type_keyboard():
     keyboard.add(key_ax)
     key_acc = telebot.types.InlineKeyboardButton(text="Аксессуары", callback_data="acc")
     keyboard.add(key_acc)
-    key_body = telebot.types.InlineKeyboardButton(text="Тела", callback_data="body")
-    keyboard.add(key_body)
+    #key_body = telebot.types.InlineKeyboardButton(text="Тела", callback_data="body")
+    #skeyboard.add(key_body)
     return keyboard
 
 # Генерация клавиатуры выбора детали

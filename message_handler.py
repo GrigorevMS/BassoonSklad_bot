@@ -292,15 +292,17 @@ def stage_handler(query_list, call, bot, connection):
         if query_list[ind][_ACTION] == 'know':
             f.correct_data_in_db(query_list[ind], call.message.chat.username, call, connection, bot)
         elif (query_list[ind][_ACTION] == 'put' 
-              and query_list[ind][_TYPE] == 'body' 
-              and query_list[ind][_STAGE][1:] == first_body_num_stage):
+            and query_list[ind][_TYPE] == 'body' 
+            and query_list[ind][_STAGE][1:] == first_body_num_stage):
             # Необходимо выяснить есть ли серийные номера не укомплектованные этим коленом
             # Если есть, выбрать из них колено с меньшим номером
-            # Если нет, сгенерировать следующий серийный номер и добавить 
+            # Если нет, сгенерировать следующий серийный номер и добавить
             # Затем необходимо добавить в таблицу bodys наше новое колено
             serial_number = f.get_next_body_num_by_section(connection, query_list[ind][_SECTION])
-            print(serial_number)
-        elif query_list[ind][_TYPE] == 'body' and f.chek_is_element_in_arr(body_num_stages, query_list[ind][_STAGE][1:]) or query_list[ind][_TYPE] == 'ax':
+            f.add_new_num_body(connection, serial_number, query_list[ind][_SECTION])
+        elif (query_list[ind][_TYPE] == 'body' 
+              and f.chek_is_element_in_arr(body_num_stages, query_list[ind][_STAGE][1:]) 
+              or query_list[ind][_TYPE] == 'ax'):
             query_list[ind][_NEXT_PART] = 0
             query_list[ind][_NEXT_STEP] = 'BODYNUM'
             bot.send_message(call.message.chat.id, 

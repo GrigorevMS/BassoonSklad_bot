@@ -1,6 +1,7 @@
 from const import users_list
 from const import _ACTION, _SECTION, _TYPE, _PART, _STAGE, _COUNT, _BODYNUM, _NEXT_STEP, _NEXT_PART
 import psycopg2
+import psycopg2.sql
 
 ######################################################################################################################################################
 ######################################################################################################################################################
@@ -127,6 +128,22 @@ def get_parts_list_from_db(pattern, connection):
             write_query_log("[INFO] Some problem with SELECT FROM parts:" 
                             + str(_ex), connection)
             return []
+
+# Получить список деталей принадлежащих колену(b%_list)   
+def get_bodys_parts_list_from_db(connection, section):
+    if connection.closed:
+        connection = getConnection()
+    with connection.cursor() as cursor:
+        try:
+            cursor.execute("""SELECT * FROM {table}"""
+                           .format(table=section.lower() + '_list'))
+            temp = cursor.fetchall()
+            arr = []
+            for i in range(len(temp)):
+                arr.append(temp[i][0])
+            return arr
+        except Exception as _ex:
+            print('[INFO] Some problem in get_bodys_parts_list_from_db() ', _ex)
         
 def get_stages_list_from_db(part, connection):
     if connection.closed:
@@ -145,6 +162,7 @@ def get_stages_list_from_db(part, connection):
                             + str(_ex), connection)
             return []
         
+# Получить список серийных номеров, находящихся в работе
 def get_bodys_num_from_db(connection):
     if connection.closed:
         connection = getConnection()
@@ -161,7 +179,8 @@ def get_bodys_num_from_db(connection):
             write_query_log('[INFO] Some problem with SELECT FROM instruments:' 
                             + str(_ex), connection)
             return []
-        
+
+# Генерируем и добавляем серийный номер инструмента
 def add_next_serial_number_to_db(connection):
     nums = get_bodys_num_from_db(connection)
     if connection.closed:
@@ -192,6 +211,8 @@ def add_next_serial_number_to_db(connection):
         except Exception as _ex:
             print('[INFO] Some problem in add_next_serial_number_to_db()', _ex)
 
+# Высняем, есть ли в instruments серийный номер, котрый не укомплектован введенным телом
+# Если есть -> возвращаем его, если нет -> добавляем новый номер в instruments и возвращаем
 def get_next_body_num_by_section(connection, section):
     nums = get_bodys_num_from_db(connection)
     if connection.closed:
@@ -209,17 +230,37 @@ def get_next_body_num_by_section(connection, section):
         except Exception as _ex:
             print('[INFO] Some problem in get_next_body_num_by_section()', _ex)
 
+# Добавляем в bodys новое тело, а в bodys_list список деталей принадлежащих этому телу
 def add_new_num_body(connection, serial_number, section):
     if connection.closed:
         connection = getConnection()
     with connection.cursor() as cursor:
         try:
             cursor.execute("""INSERT INTO bodys 
-                           (section, serial_number, 'status') 
-                           VALUES (%s, %s, 'in work')""",
+                           (section, serial_number, status) 
+                           VALUES (%s, %s, %s)""", 
+                           (section, serial_number, 'in work', ))
+            cursor.execute("""SELECT id 
+                           FROM bodys 
+                           WHERE section=%s AND serial_number=%s""", 
                            (section, serial_number, ))
-        except:
-            pass
+            ans = cursor.fetchall()
+            id = ans[0][0]
+            parts = get_bodys_parts_list_from_db(connection, section)
+            print(parts)
+            for i in range(len(parts)):
+                if parts[i].find('W') == -1:
+                    cursor.execute("""INSERT INTO bodys_list 
+                                   (body_id, part_id, status) 
+                                   VALUES (%s, %s, 'not started')""", 
+                                   (id, parts[i], ))
+                else:
+                    cursor.execute("""INSERT INTO bodys_list 
+                                   (body_id, part_id, status) 
+                                   VALUES (%s, %s, %s)""", 
+                                   (id, parts[i], 'in stock', ))
+        except Exception as _ex:
+            print('[INFO] Some problem in add_new_num_body()', _ex)
         
 def correct_data_in_db(query, username, call, connection, bot):
     print("query =", query)
