@@ -93,6 +93,8 @@ def activity_callback_worker(call):
             query_list = h.sb_handler(query_list, call, bot, connection)
         elif call.data == "ax":
             query_list = h.ax_handler(query_list, call, bot, connection)
+        elif call.data == 'num':
+            query_list = h.num_handler(query_list, call, bot, connection)
         elif call.data == "acc":
             query_list = h.acc_handler(query_list, call, bot, connection)
         elif call.data == "body":

@@ -72,6 +72,9 @@ def get_text_from_arrays(parts, stages, count):
 def get_approve_text(query):
     parts = query[_PART].split('|')[1:]
     stages = query[_STAGE].split('|')[1:]
+    if query[_COUNT] == '':
+        for i in range(len(stages)):
+            query[_COUNT] += '|1'
     count = query[_COUNT].split('|')[1:]
     text = ''
     if query[_ACTION] == 'get':
@@ -137,10 +140,7 @@ def get_bodys_parts_list_from_db(connection, section):
         try:
             cursor.execute("""SELECT * FROM {table}"""
                            .format(table=section.lower() + '_list'))
-            temp = cursor.fetchall()
-            arr = []
-            for i in range(len(temp)):
-                arr.append(temp[i][0])
+            arr = cursor.fetchall()
             return arr
         except Exception as _ex:
             print('[INFO] Some problem in get_bodys_parts_list_from_db() ', _ex)
@@ -330,3 +330,6 @@ def correct_data_in_db(query, username, call, connection, bot):
                 bot.send_message(call.message.chat.id, text=call.message.text[call.message.text.index(':') + 2:])
             except Exception as _ex:
                 print("[INFO] Some problem with UPDATE stages - 4:", _ex)
+
+def correct_num_data_in_db(query, username, call, connection, bot):
+    

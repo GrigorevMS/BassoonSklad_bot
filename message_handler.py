@@ -208,6 +208,17 @@ def ax_handler(query_list, call, bot, connection):
                      reply_markup=k.get_keyboard_from_array_with_next_button(mas, query_list[ind][_PART].split('|')[1:]))
     return query_list
 
+def num_handler(query_list, call, bot, connection):
+    ind = users_list.index(call.message.chat.username)
+    query_list[ind][_TYPE] = 'num'
+    query_list[ind][_NEXT_STEP] = "PART"
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+    mas = f.get_bodys_parts_list_from_db(connection, query_list[ind][_SECTION].lower())
+    print(mas)
+    bot.send_message(call.message.chat.id, text="Выберите деталь", 
+                     reply_markup=k.get_keyboard_from_array_with_next_button(mas, query_list[ind][_PART].split('|')[1:]))
+    return query_list
+
 def acc_handler(query_list, call, bot, connection):
     ind = users_list.index(call.message.chat.username)
     query_list[ind][_TYPE] = "acc"
@@ -245,6 +256,10 @@ def part_handler(query_list, call, bot, connection):
                              reply_markup=k.get_keyboard_from_array_with_next_button(mas, query_list[ind][_PART].split('|')[1:]))
         elif query_list[ind][_TYPE] == 'ax':
             mas = f.get_parts_list_from_db(query_list[ind][_SECTION] + "(%", connection)
+            bot.send_message(call.message.chat.id, text="Выберите деталь", 
+                             reply_markup=k.get_keyboard_from_array_with_next_button(mas, query_list[ind][_PART].split('|')[1:]))
+        elif query_list[ind][_TYPE] == 'num':
+            mas = f.get_bodys_parts_list_from_db(connection, query_list[ind][_SECTION].lower())
             bot.send_message(call.message.chat.id, text="Выберите деталь", 
                              reply_markup=k.get_keyboard_from_array_with_next_button(mas, query_list[ind][_PART].split('|')[1:]))
         elif query_list[ind][_TYPE] == 'acc':
@@ -291,23 +306,29 @@ def stage_handler(query_list, call, bot, connection):
     else:
         if query_list[ind][_ACTION] == 'know':
             f.correct_data_in_db(query_list[ind], call.message.chat.username, call, connection, bot)
-        elif (query_list[ind][_ACTION] == 'put' 
-            and query_list[ind][_TYPE] == 'body' 
-            and query_list[ind][_STAGE][1:] == first_body_num_stage):
+        #elif (query_list[ind][_ACTION] == 'put' 
+        #    and query_list[ind][_TYPE] == 'body' 
+        #    and query_list[ind][_STAGE][1:] == first_body_num_stage):
             # Необходимо выяснить есть ли серийные номера не укомплектованные этим коленом
             # Если есть, выбрать из них колено с меньшим номером
             # Если нет, сгенерировать следующий серийный номер и добавить
             # Затем необходимо добавить в таблицу bodys наше новое колено
-            serial_number = f.get_next_body_num_by_section(connection, query_list[ind][_SECTION])
-            f.add_new_num_body(connection, serial_number, query_list[ind][_SECTION])
-        elif (query_list[ind][_TYPE] == 'body' 
-              and f.chek_is_element_in_arr(body_num_stages, query_list[ind][_STAGE][1:]) 
-              or query_list[ind][_TYPE] == 'ax'):
+            #serial_number = f.get_next_body_num_by_section(connection, query_list[ind][_SECTION])
+            #f.add_new_num_body(connection, serial_number, query_list[ind][_SECTION])
+        #elif (query_list[ind][_TYPE] == 'body' 
+        #      and f.chek_is_element_in_arr(body_num_stages, query_list[ind][_STAGE][1:]) 
+        #      or query_list[ind][_TYPE] == 'ax'):
+        #    query_list[ind][_NEXT_PART] = 0
+        #    query_list[ind][_NEXT_STEP] = 'BODYNUM'
+        #    bot.send_message(call.message.chat.id, 
+        #                     text='Выберите номер тела, которому принадлежат детали:\n' 
+        #                        + f.get_bodynum_text(query_list[ind]),
+        #                     reply_markup=k.get_keyboard_from_array(f.get_bodys_num_from_db(connection)))
+        elif query_list[ind][_TYPE] == 'num':
             query_list[ind][_NEXT_PART] = 0
             query_list[ind][_NEXT_STEP] = 'BODYNUM'
             bot.send_message(call.message.chat.id, 
-                             text='Выберите номер тела, которому принадлежат детали:\n' 
-                                + f.get_bodynum_text(query_list[ind]),
+                             text='Выберите номер тела, которому принадлежат детали:\n',
                              reply_markup=k.get_keyboard_from_array(f.get_bodys_num_from_db(connection)))
         else:
             query_list[ind][_NEXT_PART] = 0
@@ -389,6 +410,9 @@ def bodynum_handler(query_list, call, bot, connection):
     ind = users_list.index(call.message.chat.username)
     query_list[ind][_BODYNUM] = call.data
     query_list[ind][_NEXT_STEP] = 'APPROVE'
+    bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
+    t = f.get_approve_text(query_list[ind])
+    bot.send_message(call.message.chat.id, text="Вы выбрали: " + t, reply_markup=k.get_approve_keyboard())
     return query_list
 
 ### APPROVE ##########################################################################################################################################
@@ -397,7 +421,10 @@ def approve_handler(query_list, call, bot, connection):
     if call.data == "yes":
         ind = users_list.index(call.message.chat.username)
         bot.delete_message(chat_id=call.message.chat.id, message_id=call.message.message_id)
-        f.correct_data_in_db(query_list[ind], call.message.chat.username, call, connection, bot)
+        if query_list[ind][_TYPE] != 'num':
+            f.correct_data_in_db(query_list[ind], call.message.chat.username, call, connection, bot)
+        else:
+            
         query_list[ind] = ["", "", "", "", "", "", "", "", 0]
 
     elif call.data == "no":
