@@ -10,7 +10,7 @@ def get_activity_keyboard():
     keyboard.add(key_get)
     key_put = telebot.types.InlineKeyboardButton(text="Положить детали", callback_data="put")
     keyboard.add(key_put)
-    key_know = telebot.types.InlineKeyboardButton(text="Узнать количество", callback_data="know")
+    key_know = telebot.types.InlineKeyboardButton(text="Узнать информацию о деталях", callback_data="know")
     keyboard.add(key_know)
     key_correct = telebot.types.InlineKeyboardButton(text="Скорректировать количество", callback_data="correct")
     keyboard.add(key_correct)

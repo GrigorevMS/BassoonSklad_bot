@@ -180,156 +180,191 @@ def get_bodys_num_from_db(connection):
                             + str(_ex), connection)
             return []
 
-# Генерируем и добавляем серийный номер инструмента
-def add_next_serial_number_to_db(connection):
-    nums = get_bodys_num_from_db(connection)
+def get_bodys_num_by_section(connection, section):
     if connection.closed:
         connection = getConnection()
     with connection.cursor() as cursor:
         try:
-            cursor.execute("""SELECT date_part('year', CURRENT_TIMESTAMP)""")
-            year = int(cursor.fetchall()[0][0] - 2000)
-            temp = []
-            for i in range(len(nums)):
-                if nums[i][0][1:3] == str(year):
-                    temp.append(nums[i][0])
-            nums = temp
-            if len(nums) > 0:
-                last_num = str(int(nums[len(nums) - 1][-3:]) + 1)
-            else:
-                last_num = '001'
-            
-            while len(last_num) < 3:
-                last_num = '0' + last_num
-            next_num = 'B' + str(year) + last_num
-            
-            cursor.execute("""INSERT INTO instruments 
-                            (serial_number, status, time_start)
-                            VALUES (%s, 'in work', CURRENT_TIMESTAMP)""",
-                            (next_num, ))
-            return next_num
-        except Exception as _ex:
-            print('[INFO] Some problem in add_next_serial_number_to_db()', _ex)
-
-# Высняем, есть ли в instruments серийный номер, котрый не укомплектован введенным телом
-# Если есть -> возвращаем его, если нет -> добавляем новый номер в instruments и возвращаем
-def get_next_body_num_by_section(connection, section):
-    nums = get_bodys_num_from_db(connection)
-    if connection.closed:
-        connection = getConnection()
-    with connection.cursor() as cursor:
-        try:
-            for i in range(len(nums)):
-                cursor.execute("""SELECT count(*) 
-                               FROM bodys 
-                               WHERE section=%s AND serial_number=%s""",
-                               (section, nums[i], ))
-                if cursor.fetchall()[0][0] == 0:
-                    return nums[i][0]
-            return add_next_serial_number_to_db(connection)
-        except Exception as _ex:
-            print('[INFO] Some problem in get_next_body_num_by_section()', _ex)
-
-# Добавляем в bodys новое тело, а в bodys_list список деталей принадлежащих этому телу
-def add_new_num_body(connection, serial_number, section):
-    if connection.closed:
-        connection = getConnection()
-    with connection.cursor() as cursor:
-        try:
-            cursor.execute("""INSERT INTO bodys 
-                           (section, serial_number, status) 
-                           VALUES (%s, %s, %s)""", 
-                           (section, serial_number, 'in work', ))
-            cursor.execute("""SELECT id 
+            cursor.execute('''SELECT serial_number 
                            FROM bodys 
-                           WHERE section=%s AND serial_number=%s""", 
-                           (section, serial_number, ))
-            ans = cursor.fetchall()
-            id = ans[0][0]
-            parts = get_bodys_parts_list_from_db(connection, section)
-            print(parts)
-            for i in range(len(parts)):
-                if parts[i].find('W') == -1:
-                    cursor.execute("""INSERT INTO bodys_list 
-                                   (body_id, part_id, status) 
-                                   VALUES (%s, %s, 'not started')""", 
-                                   (id, parts[i], ))
-                else:
-                    cursor.execute("""INSERT INTO bodys_list 
-                                   (body_id, part_id, status) 
-                                   VALUES (%s, %s, %s)""", 
-                                   (id, parts[i], 'in stock', ))
+                           WHERE section=%s AND status='in work'
+                           ORDER BY serial_number''', (section, ))
+            mas = cursor.fetchall()
+            return mas
         except Exception as _ex:
-            print('[INFO] Some problem in add_new_num_body()', _ex)
+            print('[INFO] Some problem with SELECT FROM bodys:', _ex)
+            write_query_log('[INFO] Some problem with SELECT FROM bodys:' 
+                            + str(_ex), connection)
+            return []
+
+
         
 def correct_data_in_db(query, username, call, connection, bot):
     print("query =", query)
     write_query_log("query = " + str(query), connection)
     if connection.closed:
         connection = getConnection()
-    if query[_ACTION] == "get":
-        with connection.cursor() as cursor:
-            try:
-                parts = query[_PART].split('|')[1:]
-                stages = query[_STAGE].split('|')[1:]
-                count = query[_COUNT].split('|')[1:]
-                for i in range(len(parts)):
-                    cursor.execute("UPDATE stages SET count = count - %s WHERE part_id = %s and name = %s",
-                               (int(count[i]), parts[i], stages[i],))
-                    #cursor.execute("INSERT INTO log (username, action, part_id, stage_name, count) VALUES (%s, %s, %s, %s, %s)", 
-                    #               (username, query[_ACTION], query[_PART], query[_STAGE], query[_COUNT], ))
-                    write_log(username, query[_ACTION], parts[i], stages[i], count[i], connection)
-                bot.send_message(call.message.chat.id, text=call.message.text[call.message.text.index(':') + 2:])
-            except Exception as _ex:
-                print("[INFO] Some problem with UPDATE stages - 1:", _ex)
-    elif query[_ACTION] == "put":
-        with connection.cursor() as cursor:
-            try:
-                parts = query[_PART].split('|')[1:]
-                stages = query[_STAGE].split('|')[1:]
-                count = query[_COUNT].split('|')[1:]
-                for i in range(len(parts)):
-                    cursor.execute("UPDATE stages SET count = count + %s WHERE part_id = %s and name = %s",
-                               (int(count[i]), parts[i], stages[i],))
-                    #cursor.execute("INSERT INTO log (username, action, part_id, stage_name, count) VALUES (%s, %s, %s, %s, %s)", 
-                    #               (username, query[_ACTION], query[_PART], query[_STAGE], query[_COUNT], ))
-                    write_log(username, query[_ACTION], parts[i], stages[i], count[i], connection)
-                bot.send_message(call.message.chat.id, text=call.message.text[call.message.text.index(':') + 2:])
-            except Exception as _ex:
-                print("[INFO] Some problem with UPDATE stages - 2:", _ex)
-    elif query[_ACTION] == "know":
-        with connection.cursor() as cursor:
-            try:
-                parts = query[_PART].split('|')[1:]
-                stages = query[_STAGE].split('|')[1:]
-                count = query[_COUNT].split('|')[1:]
-                text = ''
-                for i in range(len(parts)):
-                    cursor.execute("SELECT count FROM stages WHERE part_id = %s and name = %s", (parts[i], stages[i], ))
-                    count = cursor.fetchone()
-                    #cursor.execute("INSERT INTO log (username, action, part_id, stage_name, count) VALUES (%s, %s, %s, %s, %s)", 
-                    #               (username, query[_ACTION], query[_PART], query[_STAGE], 0, ))
-                    text += parts[i] + ', ' + stages[i] + ': ' + str(count[0]) + ' штук(и) в наличии\n'
-                    write_log(username, query[_ACTION], parts[i], stages[i], 0, connection)
-                bot.send_message(call.message.chat.id, text=text)
-            except Exception as _ex:
-                print("[INFO] Some problem with UPDATE stages - 3:", _ex)
+    ## TYPE != num #######################################################
+    ######################################################################
+    if query[_TYPE] != 'num':
+        if query[_ACTION] == "get":
+            get_correct_in_db(query, username, call, connection, bot)
+        elif query[_ACTION] == "put":
+            put_correct_in_db(query, username, call, connection, bot)
+        elif query[_ACTION] == "know":
+            know_correct_in_db(query, username, call, connection, bot)
+        elif query[_ACTION] == "correct":
+            correct_correct_in_db(query, username, call, connection, bot)
+    else:
+        if query[_ACTION] == 'get':
+            get_num_correct_in_db(query, username, call, connection, bot)
+        elif query[_ACTION] == 'put':
+            put_num_correct_in_db(query, username, call, connection, bot)
+        elif query[_ACTION] == 'know':
+            know_num_correct_in_db(query, username, call, connection, bot)
+        elif query[_ACTION] == 'correct':
+            correct_num_correct_in_db(query, username, call, connection, bot)
 
-    elif query[_ACTION] == "correct":
-        with connection.cursor() as cursor:
-            try:
-                parts = query[_PART].split('|')[1:]
-                stages = query[_STAGE].split('|')[1:]
-                count = query[_COUNT].split('|')[1:]
-                for i in range(len(parts)):
-                    cursor.execute("UPDATE stages SET count = %s WHERE part_id = %s and name = %s", 
-                                   (int(count[i]), parts[i], stages[i],))
-                    #cursor.execute("INSERT INTO log (username, action, part_id, stage_name, count) VALUES (%s, %s, %s, %s, %s)", 
-                    #               (username, query[_ACTION], query[_PART], query[_STAGE], query[_COUNT], ))
-                    write_log(username, query[_ACTION], parts[i], stages[i], count[i], connection)
-                bot.send_message(call.message.chat.id, text=call.message.text[call.message.text.index(':') + 2:])
-            except Exception as _ex:
-                print("[INFO] Some problem with UPDATE stages - 4:", _ex)
+def get_correct_in_db(query, username, call, connection, bot):
+    with connection.cursor() as cursor:
+        try:
+            parts = query[_PART].split('|')[1:]
+            stages = query[_STAGE].split('|')[1:]
+            count = query[_COUNT].split('|')[1:]
+            for i in range(len(parts)):
+                cursor.execute("UPDATE stages SET count = count - %s WHERE part_id = %s and name = %s",
+                        (int(count[i]), parts[i], stages[i],))
+                #cursor.execute("INSERT INTO log (username, action, part_id, stage_name, count) VALUES (%s, %s, %s, %s, %s)", 
+                #               (username, query[_ACTION], query[_PART], query[_STAGE], query[_COUNT], ))
+                write_log(username, query[_ACTION], parts[i], stages[i], count[i], connection)
+            bot.send_message(call.message.chat.id, text=call.message.text[call.message.text.index(':') + 2:])
+        except Exception as _ex:
+            print("[INFO] Some problem with UPDATE stages in get_correct_in_db:", _ex)
 
-def correct_num_data_in_db(query, username, call, connection, bot):
-    
+def put_correct_in_db(query, username, call, connection, bot):
+    with connection.cursor() as cursor:
+        try:
+            parts = query[_PART].split('|')[1:]
+            stages = query[_STAGE].split('|')[1:]
+            count = query[_COUNT].split('|')[1:]
+            for i in range(len(parts)):
+                cursor.execute("UPDATE stages SET count = count + %s WHERE part_id = %s and name = %s",
+                        (int(count[i]), parts[i], stages[i],))
+                #cursor.execute("INSERT INTO log (username, action, part_id, stage_name, count) VALUES (%s, %s, %s, %s, %s)", 
+                #               (username, query[_ACTION], query[_PART], query[_STAGE], query[_COUNT], ))
+                write_log(username, query[_ACTION], parts[i], stages[i], count[i], connection)
+            bot.send_message(call.message.chat.id, text=call.message.text[call.message.text.index(':') + 2:])
+        except Exception as _ex:
+            print("[INFO] Some problem with UPDATE stages in put_correct_in_db:", _ex)
+
+def know_correct_in_db(query, username, call, connection, bot):
+    with connection.cursor() as cursor:
+        try:
+            parts = query[_PART].split('|')[1:]
+            text = ''
+            for i in range(len(parts)):
+                cursor.execute('''SELECT name, count 
+                               FROM stages 
+                               WHERE part_id = %s''', 
+                               (parts[i], ))
+                mas = cursor.fetchall()
+                for j in range(len(mas)):
+                    text += parts[i] + ', ' + str(mas[j][0]) + ': ' + str(mas[j][1]) + ' штук(и) в наличии\n'
+                    write_log(username, query[_ACTION], parts[i], str(mas[j][0]), 0, connection)
+                text += '\n'
+            bot.send_message(call.message.chat.id, text=text)
+        except Exception as _ex:
+            print("[INFO] Some problem with UPDATE stages in know_correct_in_db:", _ex)
+
+def correct_correct_in_db(query, username, call, connection, bot):
+    with connection.cursor() as cursor:
+        try:
+            parts = query[_PART].split('|')[1:]
+            stages = query[_STAGE].split('|')[1:]
+            count = query[_COUNT].split('|')[1:]
+            for i in range(len(parts)):
+                cursor.execute("UPDATE stages SET count = %s WHERE part_id = %s and name = %s", 
+                            (int(count[i]), parts[i], stages[i],))
+                #cursor.execute("INSERT INTO log (username, action, part_id, stage_name, count) VALUES (%s, %s, %s, %s, %s)", 
+                #               (username, query[_ACTION], query[_PART], query[_STAGE], query[_COUNT], ))
+                write_log(username, query[_ACTION], parts[i], stages[i], count[i], connection)
+            bot.send_message(call.message.chat.id, text=call.message.text[call.message.text.index(':') + 2:])
+        except Exception as _ex:
+            print("[INFO] Some problem with UPDATE stages in correct_correct_in_db:", _ex)
+
+def get_num_correct_in_db(query, username, call, connection, bot):
+    with connection.cursor() as cursor:
+        try:
+            parts = query[_PART].split('|')[1:]
+            stages = query[_STAGE].split('|')[1:]
+            cursor.execute('''SELECT id 
+                           FROM bodys 
+                           WHERE serial_number=%s AND section=%s''', 
+                           (query[_BODYNUM], query[_SECTION], ))
+            id = cursor.fetchall()[0][0]
+            for i in range(len(parts)):
+                cursor.execute('''UPDATE bodys_list
+                               SET status='in work'
+                               WHERE part_id=%s AND body_id=%s''', 
+                               (parts[i], id, ))
+                write_log(username, query[_ACTION], parts[i], stages[i], query[_BODYNUM], connection)
+        except Exception as _ex:
+            print('[INFO] Some problem with UPDATE stages in get_num_correct_in_db')
+
+def put_num_correct_in_db(query, username, call, connection, bot):
+    with connection.cursor() as cursor:
+        try:
+            parts = query[_PART].split('|')[1:]
+            stages = query[_STAGE].split('|')[1:]
+            cursor.execute('''SELECT id 
+                            FROM bodys 
+                            WHERE serial_number=%s AND section=%s''', 
+                            (query[_BODYNUM], query[_SECTION], ))
+            id = cursor.fetchall()[0][0]
+            for i in range(len(parts)):
+                cursor.execute('''UPDATE bodys_list 
+                               SET status='in stock', stage_name=%s
+                               WHERE part_id=%s AND body_id=%s''',
+                               (stages[i], parts[i], id, ))
+                write_log(username, query[_ACTION], parts[i], stages[i], query[_BODYNUM], connection)
+        except Exception as _ex:
+            print('[INFO] Some problem with UPDATE stages in put_num_correct_in_db')
+
+def know_num_correct_in_db(query, username, call, connection, bot):
+    with connection.cursor() as cursor:
+        try:
+            parts = query[_PART].split('|')[1:]
+            stages = query[_STAGE].split('|')[1:]
+            cursor.execute('''SELECT id 
+                           FROM bodys
+                           WHERE serial_number=%s AND section=%s''',
+                           (query[_BODYNUM], query[_SECTION], ))
+            id = cursor.fetchall()[0][0]
+            text = ''
+            for i in range(len(parts)):
+                cursor.execute('''SELECT stage_name, status 
+                               FROM bodys_list 
+                               WHERE body_id=%s AND part_id=%s''',
+                               (id, parts[i], ))
+                mas = cursor.fetchall()
+                stage = str(mas[0][0])
+                status = str(mas[0][1])
+                text += parts[i]
+                if status == 'not started':
+                    text += ', ' + 'не запущен в работу'
+                elif status == 'in work':
+                    text += ', ' + stage + ', ' + 'в работе'
+                elif status == 'in stock':
+                    text += ', ' + stage + ', ' + 'в наличии на складе'
+                text += '\n'
+                #write_log(username, query[_ACTION], parts[i], stages[i], query[_BODYNUM], connection)
+            bot.send_message(call.message.chat.id, text=text)
+        except Exception as _ex:
+            print('[INFO] Some problem with UPDATE stages in know_num_correct_in_db')
+
+def correct_num_correct_in_db(query, username, call, connection, bot):
+    try:
+        parts = query[_PART].split('|')[1:]
+        stages = query[_STAGE].split('|')[1:]
+    except Exception as _ex:
+        print('[INFO] Some problem with UPDATE stages in correct_num_correct_in_db')
