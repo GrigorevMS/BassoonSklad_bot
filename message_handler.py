@@ -318,35 +318,75 @@ def stage_handler(query_list, call, bot, connection):
     else:
         if query_list[ind][_ACTION] == 'know':
             f.correct_data_in_db(query_list[ind], call.message.chat.username, call, connection, bot)
-        #elif (query_list[ind][_ACTION] == 'put' 
-        #    and query_list[ind][_TYPE] == 'body' 
-        #    and query_list[ind][_STAGE][1:] == first_body_num_stage):
-            # Необходимо выяснить есть ли серийные номера не укомплектованные этим коленом
-            # Если есть, выбрать из них колено с меньшим номером
-            # Если нет, сгенерировать следующий серийный номер и добавить
-            # Затем необходимо добавить в таблицу bodys наше новое колено
-            #serial_number = f.get_next_body_num_by_section(connection, query_list[ind][_SECTION])
-            #f.add_new_num_body(connection, serial_number, query_list[ind][_SECTION])
-        #elif (query_list[ind][_TYPE] == 'body' 
-        #      and f.chek_is_element_in_arr(body_num_stages, query_list[ind][_STAGE][1:]) 
-        #      or query_list[ind][_TYPE] == 'ax'):
-        #    query_list[ind][_NEXT_PART] = 0
-        #    query_list[ind][_NEXT_STEP] = 'BODYNUM'
-        #    bot.send_message(call.message.chat.id, 
-        #                     text='Выберите номер тела, которому принадлежат детали:\n' 
-        #                        + f.get_bodynum_text(query_list[ind]),
-        #                     reply_markup=k.get_keyboard_from_array(f.get_bodys_num_from_db(connection)))
         elif query_list[ind][_TYPE] == 'num':
-            query_list[ind][_NEXT_PART] = 0
-            query_list[ind][_NEXT_STEP] = 'BODYNUM'
-            mas = f.get_bodys_num_by_section(connection, query_list[ind][_SECTION].upper())
-            if len(mas) > 0:
-                bot.send_message(call.message.chat.id, 
-                                text='Выберите номер тела, которому принадлежат детали:\n',
-                                reply_markup=k.get_keyboard_from_array(mas))
+            if parts[0].find('W') == 0:
+                with connection.cursor() as cursor:
+                    try:
+                        # Определяем мин.номер тела без нужного колена
+                        cursor.execute('''SELECT serial_number 
+                                       FROM instruments
+                                       WHERE status='in work'
+                                       ORDER BY serial_number''')
+                        mas = cursor.fetchall()
+                        serials = []
+                        for i in range(len(mas)):
+                            serials.append(mas[i][0])
+                        print(serials)
+                        serial = -1
+                        for i in range(len(serials)):
+                            cursor.execute('''SELECT count(*) 
+                                           FROM bodys 
+                                           WHERE serial_number=%s 
+                                           AND section=%s''', 
+                                           (serials[i], query_list[ind][_SECTION], ))
+                            if cursor.fetchall()[0][0] == 0:
+                                serial = serials[i]
+                                break
+                        print(serial)
+
+                        # Если подходящего инструмента нет
+                        if serial == -1:
+                            # Генерируем номер инструмента
+                            cursor.execute('''SELECT date_part('year', CURRENT_TIMESTAMP);''')
+                            year = str(int(cursor.fetchall()[0][0]))
+                            if len(serials) == 0:
+                                number = 1
+                            else:
+                                number = str(int(serials[len(serials) - 1][3:]) + 1)
+                            while len(number) < 3:
+                                number = '0' + number
+                            serial = 'B' + year[2:] + number
+
+                            # Добавляем номер в instruments
+                            cursor.execute('''INSERT INTO instruments
+                                           (serial_number, status)
+                                           VALUES (%s, 'in work')''', 
+                                           (serial, ))
+                            
+                        # Добавляем номер с коленом в bodys
+                        cursor.execute('''INSERT INTO bodys
+                                       (section, serial_number, status)
+                                       VALUES (%s, %s, 'in work')''', 
+                                       (query_list[ind][_SECTION], serial, ))
+                        
+                        # Добавляем элементы колена в bodys_list
+                        cursor.execute('''SELECT * FROM {table}'''
+                                       .format(table=query_list[ind][_SECTION].lower() + '_list'))
+                        mas = cursor.fetchall()
+                        cursor.execute('''SELECT id FROM ''')
+                    except Exception as _ex:
+                        print("Some problem in SELECT serial_number FROM instruments...", _ex)
             else:
-                bot.send_message(call.message.chat.id,
-                                 text='Подходящих тел нет в работе, уточните информацию')
+                query_list[ind][_NEXT_PART] = 0
+                query_list[ind][_NEXT_STEP] = 'BODYNUM'
+                mas = f.get_bodys_num_by_section(connection, query_list[ind][_SECTION].upper())
+                if len(mas) > 0:
+                    bot.send_message(call.message.chat.id, 
+                                    text='Выберите номер тела, которому принадлежат детали:\n',
+                                    reply_markup=k.get_keyboard_from_array(mas))
+                else:
+                    bot.send_message(call.message.chat.id,
+                                    text='Подходящих тел нет в работе, уточните информацию')
         else:
             query_list[ind][_NEXT_PART] = 0
             query_list[ind][_NEXT_STEP] = 'COUNT'
